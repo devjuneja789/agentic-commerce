@@ -30,7 +30,10 @@ export function CatalogTable() {
     const q = query.trim().toLowerCase()
     if (!q) return products
     return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q),
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q),
     )
   }, [products, query])
 
@@ -40,50 +43,56 @@ export function CatalogTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="Filter by name, category, or SKU..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-xs"
-        />
-        <Button variant="ghost" size="sm" onClick={load}>
-          Refresh
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Input
+            placeholder="Search catalog by name, category, or SKU..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-72"
+          />
+          <Button variant="secondary" size="sm" onClick={load}>
+            Refresh
+          </Button>
+        </div>
         {status === 'ready' && (
-          <span className="text-xs text-dust">
-            {filtered.length} of {products.length} products
+          <span className="font-mono text-xs text-slate-400">
+            Showing <span className="font-semibold text-slate-200">{filtered.length}</span> of {products.length} products
           </span>
         )}
       </div>
 
       {status === 'loading' && (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-dust">
-          <Spinner /> Loading catalog...
+        <div className="flex items-center justify-center gap-2.5 py-20 text-sm text-slate-400">
+          <Spinner size={16} /> Loading catalog inventory...
         </div>
       )}
 
       {status === 'error' && (
-        <div className="py-16 text-center text-sm text-rust">Couldn't load the catalog. Is the server running?</div>
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 py-12 text-center text-sm text-rose-400">
+          Failed to load catalog. Ensure the server is running on port 5000.
+        </div>
       )}
 
       {status === 'ready' && filtered.length === 0 && (
-        <div className="py-16 text-center text-sm text-dust">No products match "{query}".</div>
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.01] py-16 text-center text-sm text-slate-400">
+          No catalog items matched "{query}".
+        </div>
       )}
 
       {status === 'ready' && filtered.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-dust/15">
-          <table className="w-full text-sm">
+        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface/80 backdrop-blur-sm">
+          <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-dust/15 bg-surface-raised/50 text-left text-xs uppercase tracking-wide text-dust">
-                <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Price ($)</th>
-                <th className="px-4 py-3 font-medium">Stock</th>
-                <th className="px-4 py-3 font-medium">Availability</th>
+              <tr className="border-b border-white/[0.08] bg-white/[0.02] font-mono text-xs uppercase tracking-wider text-slate-400">
+                <th className="px-5 py-3.5 font-medium">Product / SKU</th>
+                <th className="px-5 py-3.5 font-medium">Category</th>
+                <th className="px-5 py-3.5 font-medium">Price ($)</th>
+                <th className="px-5 py-3.5 font-medium">Live Stock</th>
+                <th className="px-5 py-3.5 font-medium">Status</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-white/[0.05]">
               {filtered.map((p) => (
                 <ProductRow key={p.id} product={p} onUpdated={handleUpdated} />
               ))}
@@ -135,20 +144,35 @@ function ProductRow({ product, onUpdated }: { product: ProductOffer; onUpdated: 
     commitValue(field, num)
   }
 
+  const isOutOfStock = product.availability === 'out_of_stock'
+
   return (
-    <tr className="border-b border-dust/10 last:border-0 hover:bg-surface-raised/30">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          <img src={product.imageUrl} alt="" className="h-10 w-10 rounded-md bg-surface-raised object-cover" />
+    <tr
+      className={`transition-colors duration-150 hover:bg-white/[0.02] ${
+        isOutOfStock ? 'bg-rose-500/[0.02]' : ''
+      }`}
+    >
+      <td className="px-5 py-4">
+        <div className="flex items-center gap-3.5">
+          <img
+            src={product.imageUrl}
+            alt=""
+            className="h-12 w-12 rounded-lg border border-white/[0.1] bg-surface-raised object-cover shadow-sm"
+          />
           <div>
-            <div className="font-medium text-linen">{product.name}</div>
-            <div className="font-mono text-[11px] text-dust">{product.sku}</div>
+            <div className="font-medium text-slate-100">{product.name}</div>
+            <div className="font-mono text-xs text-slate-400">{product.sku}</div>
           </div>
         </div>
       </td>
-      <td className="px-4 py-3 text-dust">{product.category}</td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <td className="px-5 py-4 font-mono text-xs text-slate-300">
+        <span className="rounded-md border border-white/[0.06] bg-white/[0.02] px-2 py-1">
+          {product.category}
+        </span>
+      </td>
+      <td className="px-5 py-4">
+        <div className="flex items-center gap-2 font-mono">
+          <span className="text-slate-400">$</span>
           <input
             type="number"
             min={0}
@@ -156,14 +180,14 @@ function ProductRow({ product, onUpdated }: { product: ProductOffer; onUpdated: 
             onChange={(e) => setPrice(e.target.value)}
             onBlur={() => handleBlur('price')}
             onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
-            className="focus-thread w-20 rounded border border-dust/20 bg-surface-raised px-2 py-1 font-mono text-xs text-linen"
+            className="focus-thread w-20 rounded-md border border-white/[0.08] bg-surface-raised/90 px-2.5 py-1 text-xs text-slate-100 transition-colors focus:border-[#0070BA]"
           />
           {saving === 'price' && <Spinner size={12} />}
-          {justSaved === 'price' && <span className="text-[10px] text-sage">saved</span>}
+          {justSaved === 'price' && <span className="font-mono text-[10px] text-emerald-400">saved</span>}
         </div>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <td className="px-5 py-4">
+        <div className="flex items-center gap-2 font-mono">
           <input
             type="number"
             min={0}
@@ -171,25 +195,27 @@ function ProductRow({ product, onUpdated }: { product: ProductOffer; onUpdated: 
             onChange={(e) => setStock(e.target.value)}
             onBlur={() => handleBlur('stock')}
             onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
-            className="focus-thread w-16 rounded border border-dust/20 bg-surface-raised px-2 py-1 font-mono text-xs text-linen"
+            className="focus-thread w-20 rounded-md border border-white/[0.08] bg-surface-raised/90 px-2.5 py-1 text-xs text-slate-100 transition-colors focus:border-[#0070BA]"
           />
           <button
             type="button"
-            title="Zero out stock — triggers OUT_OF_STOCK on the next checkout (Phase 4 demo lever)"
+            title="Set stock to 0 to simulate OUT_OF_STOCK test"
             onClick={() => {
               setStock('0')
               commitValue('stock', 0)
             }}
-            className="text-[10px] text-dust underline decoration-dotted hover:text-rust"
+            className="rounded border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-slate-400 transition-colors hover:border-rose-500/40 hover:text-rose-400"
           >
-            zero
+            Zero
           </button>
           {saving === 'stock' && <Spinner size={12} />}
-          {justSaved === 'stock' && <span className="text-[10px] text-sage">saved</span>}
+          {justSaved === 'stock' && <span className="font-mono text-[10px] text-emerald-400">saved</span>}
         </div>
       </td>
-      <td className="px-4 py-3">
-        <Badge tone={availabilityTone(product.availability)}>{product.availability.replace(/_/g, ' ')}</Badge>
+      <td className="px-5 py-4">
+        <Badge tone={availabilityTone(product.availability)}>
+          {product.availability.replace(/_/g, ' ')}
+        </Badge>
       </td>
     </tr>
   )

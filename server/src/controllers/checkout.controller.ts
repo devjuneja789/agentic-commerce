@@ -379,7 +379,7 @@ export async function captureOrderEndpoint(req: Request<{ orderId: string }>, re
     }
 
     if (order.status === 'paid') {
-      res.status(200).json({ status: 'paid', message: 'Order is already paid', orderId })
+      res.status(200).json({ status: 'paid', message: 'Order is already paid', orderId, order })
       return
     }
 
@@ -409,6 +409,156 @@ export async function captureOrderEndpoint(req: Request<{ orderId: string }>, re
       status: 'paid',
       orderId: order._id.toString(),
       captureId: captureResult.id,
+      order,
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// GET /api/checkout/:orderId
+export async function getOrderEndpoint(
+  req: Request<{ orderId: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { orderId } = req.params
+    const order = await Order.findById(orderId)
+    if (!order) {
+      res.status(404).json({ error: 'ORDER_NOT_FOUND', message: `Order ${orderId} not found` })
+      return
+    }
+    res.status(200).json({ order })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// GET /api/checkout/pending
+export async function getPendingOrdersEndpoint(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const orders = await Order.find({ status: 'pending_approval' }).sort({ createdAt: -1 })
+    res.status(200).json({ count: orders.length, orders })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// POST /api/checkout/:orderId/approve
+export async function approveOrderEndpoint(
+  req: Request<{ orderId: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { orderId } = req.params
+    const order = await Order.findById(orderId)
+    if (!order) {
+      res.status(404).json({ error: 'ORDER_NOT_FOUND', message: `Order ${orderId} not found` })
+      return
+    }
+
+    if (order.status !== 'pending_approval') {
+      res.status(400).json({
+        error: 'INVALID_STATUS',
+        message: `Order status is "${order.status}", only "pending_approval" can be approved.`,
+      })
+      return
+    }
+
+    // Generate PayPal Orders v2 checkout link
+    const ppOrder = await createPayPalOrderWithRetry({
+      amount: order.amount,
+      currency: order.currency || 'USD',
+      description: `${order.product.name} x${order.quantity}`,
+      referenceId: order._id.toString(),
+    })
+
+    order.paypal = {
+      orderId: ppOrder.id,
+      approvalUrl: ppOrder.approvalUrl,
+      status: ppOrder.status,
+    }
+    order.status = 'awaiting_payment'
+    await order.save()
+
+    await logAudit({
+      actor: 'admin-approval',
+      action: 'gate',
+      decision: 'approved_by_admin',
+      reasoning: `Human manager approved order of $${order.amount}. Issued PayPal checkout link (${ppOrder.id}).`,
+      input: { orderId: order._id.toString(), amount: order.amount },
+      result: { paypalOrderId: ppOrder.id, approvalUrl: ppOrder.approvalUrl },
+      orderId: order._id,
+      productId: order.product.productId,
+    })
+
+    res.status(200).json({
+      status: 'awaiting_payment',
+      orderId: order._id.toString(),
+      paypalOrderId: ppOrder.id,
+      paymentLink: ppOrder.approvalUrl,
+      approvalUrl: ppOrder.approvalUrl,
+      order,
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// POST /api/checkout/:orderId/deny
+export async function denyOrderEndpoint(
+  req: Request<{ orderId: string }, unknown, { reason?: string }>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { orderId } = req.params
+    const order = await Order.findById(orderId)
+    if (!order) {
+      res.status(404).json({ error: 'ORDER_NOT_FOUND', message: `Order ${orderId} not found` })
+      return
+    }
+
+    if (order.status !== 'pending_approval') {
+      res.status(400).json({
+        error: 'INVALID_STATUS',
+        message: `Order status is "${order.status}", only "pending_approval" can be denied.`,
+      })
+      return
+    }
+
+    const reason = req.body.reason || 'Order denied by store administrator.'
+
+    // Atomically release the held stock
+    await releaseStock(order.product.productId, order.quantity)
+
+    order.status = 'rejected'
+    order.rejectionReason = reason
+    await order.save()
+
+    await logAudit({
+      actor: 'admin-approval',
+      action: 'gate',
+      decision: 'denied_by_admin',
+      reasoning: `${reason} Released ${order.quantity} reserved unit(s) back to inventory.`,
+      input: { orderId: order._id.toString(), reason },
+      result: { stockReleased: order.quantity },
+      orderId: order._id,
+      productId: order.product.productId,
+    })
+
+    res.status(200).json({
+      status: 'rejected',
+      orderId: order._id.toString(),
+      message: reason,
+      stockReleased: order.quantity,
+      order,
     })
   } catch (err) {
     next(err)

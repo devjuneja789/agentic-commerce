@@ -9,6 +9,7 @@ import checkoutRoutes from './routes/checkout.routes'
 import webhookRoutes from './routes/webhook.routes'
 import auditRoutes from './routes/audit.routes'
 import agentRoutes from './routes/agent.routes'
+import mcpRoutes from './routes/mcp.routes'
 import './types' // pulls in the Express.Request.rawBody augmentation
 
 const app = express()
@@ -37,6 +38,7 @@ app.use('/api/checkout', checkoutRoutes)
 app.use('/api/webhooks', webhookRoutes)
 app.use('/api/audit', auditRoutes)
 app.use('/api/agent', agentRoutes)
+app.use('/api/mcp', mcpRoutes)
 
 app.use(errorHandler)
 
